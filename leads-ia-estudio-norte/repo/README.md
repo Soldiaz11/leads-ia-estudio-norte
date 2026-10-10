@@ -55,6 +55,8 @@ Ejecución #19 del 10/10/2026, disparada por un email real:
 - Aprobado desde Gmail y respondido en el mismo hilo: Thread ID `1a1274a0eb0c7d4d` de entrada y de salida.
 - Notion: lead en estado *Enviado*.
 
+- Link del video de prueba: https://drive.google.com/drive/folders/199abLb6GvCxohovZmcCisiWqX52WfHjd?usp=sharing 
+
 ## Cómo importarlo
 
 1. En n8n: **Import from file** → `workflow/leads-ia-estudio-norte.json`.
