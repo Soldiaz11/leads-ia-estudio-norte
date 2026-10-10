@@ -1,0 +1,1100 @@
+{
+  "id": "leads-ia-simple",
+  "name": "Leads estudio de arquitectura",
+  "nodes": [
+    {
+      "id": "d4286d5d-e059-4afa-9d44-a296ae0a6cbe",
+      "name": "Gmail: Nuevo Email de Cliente",
+      "type": "n8n-nodes-base.gmailTrigger",
+      "typeVersion": 1.4,
+      "position": [
+        0,
+        300
+      ],
+      "parameters": {
+        "pollTimes": {
+          "item": [
+            {
+              "mode": "everyMinute"
+            }
+          ]
+        },
+        "event": "messageReceived",
+        "simple": false,
+        "maxResults": 1,
+        "filters": {
+          "q": "subject:(consulta OR presupuesto OR cotizacion OR reforma) -from:me -subject:APROBACION",
+          "readStatus": "unread"
+        },
+        "options": {
+          "downloadAttachments": false
+        }
+      },
+      "credentials": {}
+    },
+    {
+      "id": "9e5f094c-7ed7-40fc-b269-3ce24e381df5",
+      "name": "Preparar Datos y Configuración",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        240,
+        300
+      ],
+      "parameters": {
+        "mode": "manual",
+        "includeOtherFields": false,
+        "assignments": {
+          "assignments": [
+            {
+              "id": "a1",
+              "name": "nombre",
+              "value": "={{ $json.from.value[0].name || $json.from.value[0].address.split('@')[0] }}",
+              "type": "string"
+            },
+            {
+              "id": "a2",
+              "name": "email",
+              "value": "={{ $json.from.value[0].address.toLowerCase() }}",
+              "type": "string"
+            },
+            {
+              "id": "a3",
+              "name": "asunto",
+              "value": "={{ $json.subject }}",
+              "type": "string"
+            },
+            {
+              "id": "a4",
+              "name": "mensaje",
+              "value": "={{ ($json.text || '').split(/\\n\\s*(El|On) .+(escribió|wrote):/)[0].replace(/[{}]/g, '').trim().slice(0, 2000) }}",
+              "type": "string"
+            },
+            {
+              "id": "a5",
+              "name": "gmailMessageId",
+              "value": "={{ $json.id }}",
+              "type": "string"
+            },
+            {
+              "id": "a6",
+              "name": "gmailThreadId",
+              "value": "={{ $json.threadId }}",
+              "type": "string"
+            },
+            {
+              "id": "a7",
+              "name": "empresa",
+              "value": "Estudio Norte Arquitectura",
+              "type": "string"
+            },
+            {
+              "id": "a8",
+              "name": "emailNegocio",
+              "value": "solagudiaz@gmail.com",
+              "type": "string"
+            },
+            {
+              "id": "a9",
+              "name": "emailAprobador",
+              "value": "solagudiaz@gmail.com",
+              "type": "string"
+            },
+            {
+              "id": "a10",
+              "name": "minCaracteres",
+              "value": 15,
+              "type": "number"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "93be450c-1eaf-45cd-b78c-937bf49b95eb",
+      "name": "Filtro Anti-Bucle",
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2.2,
+      "position": [
+        480,
+        300
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "leftValue": "={{ $json.email }}",
+              "rightValue": "={{ $json.emailNegocio }}",
+              "operator": {
+                "type": "string",
+                "operation": "notEquals"
+              }
+            },
+            {
+              "leftValue": "={{ $json.asunto }}",
+              "rightValue": "APROBACION",
+              "operator": {
+                "type": "string",
+                "operation": "notContains"
+              }
+            },
+            {
+              "leftValue": "={{ $json.mensaje.length }}",
+              "rightValue": "={{ $json.minCaracteres }}",
+              "operator": {
+                "type": "number",
+                "operation": "gte"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "c9e6b6a3-4e48-4758-b4cd-24d2033e57b4",
+      "name": "Guardar Lead en Notion (Pendiente)",
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 3,
+      "position": [
+        720,
+        300
+      ],
+      "parameters": {
+        "authentication": "oAuth2",
+        "resource": "databasePage",
+        "operation": "create",
+        "dataSourceId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "992bc0f0-0e9f-4627-bf41-f097c7eed8d6",
+          "cachedResultName": "Leads"
+        },
+        "title": "={{ $json.nombre }}",
+        "propertiesUi": {
+          "propertyValues": [
+            {
+              "key": "Email|email",
+              "emailValue": "={{ $json.email }}"
+            },
+            {
+              "key": "Asunto|rich_text",
+              "textContent": "={{ $json.asunto }}"
+            },
+            {
+              "key": "Mensaje|rich_text",
+              "textContent": "={{ $json.mensaje }}"
+            },
+            {
+              "key": "Estado|select",
+              "selectValue": "Pendiente"
+            },
+            {
+              "key": "Gmail Message ID|rich_text",
+              "textContent": "={{ $json.gmailMessageId }}"
+            },
+            {
+              "key": "Gmail Thread ID|rich_text",
+              "textContent": "={{ $json.gmailThreadId }}"
+            }
+          ]
+        },
+        "simple": true
+      },
+      "credentials": {},
+      "retryOnFail": true,
+      "maxTries": 3
+    },
+    {
+      "id": "2cd331ab-b3a1-40e2-a428-7709fc1d6dd7",
+      "name": "Marcar Email como Leído",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        960,
+        300
+      ],
+      "parameters": {
+        "resource": "message",
+        "operation": "markAsRead",
+        "messageId": "={{ $('Preparar Datos y Configuración').first().json.gmailMessageId }}"
+      },
+      "credentials": {}
+    },
+    {
+      "id": "68eee2b9-5498-4a9d-b3d9-85d158260b7d",
+      "name": "Leer Servicios de Notion",
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 3,
+      "position": [
+        1200,
+        300
+      ],
+      "parameters": {
+        "authentication": "oAuth2",
+        "resource": "databasePage",
+        "operation": "getAll",
+        "dataSourceId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "6d6b06f3-0090-441b-aa84-cbb6a1bd2a2c",
+          "cachedResultName": "Servicios"
+        },
+        "returnAll": true,
+        "filterType": "json",
+        "filterJson": "{\"property\":\"Activo\",\"checkbox\":{\"equals\":true}}",
+        "simple": true
+      },
+      "credentials": {},
+      "executeOnce": true,
+      "retryOnFail": true,
+      "maxTries": 3
+    },
+    {
+      "id": "55132181-4be7-4e2b-8703-2ceacb8152e6",
+      "name": "Claude: Analizar Lead y Redactar Respuesta",
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.9,
+      "position": [
+        1440,
+        300
+      ],
+      "parameters": {
+        "promptType": "define",
+        "text": "=Analizá este email de un posible cliente.\n\nNombre: {{ $('Preparar Datos y Configuración').first().json.nombre }}\nAsunto: {{ $('Preparar Datos y Configuración').first().json.asunto }}\nMensaje: {{ $('Preparar Datos y Configuración').first().json.mensaje }}\n\nServicios disponibles (base de datos de Notion):\n{{ $('Leer Servicios de Notion').all().map(s => '- id: ' + s.json.id + ' | ' + s.json.name + ' | desde USD ' + s.json.property_precio_desde_usd + ' | plazo: ' + s.json.property_plazo_estimado).join('\\n') }}",
+        "messages": {
+          "messageValues": [
+            {
+              "type": "SystemMessagePromptTemplate",
+              "message": "=Sos el asistente comercial de {{ $('Preparar Datos y Configuración').first().json.empresa }}, un estudio de arquitectura. Tu tarea: calificar al posible cliente y escribir un borrador de respuesta que una persona va a revisar.\n\nReglas:\n1. Usá solo los servicios, precios y plazos de la lista. No inventes datos.\n2. Si falta información (ubicación, metros, presupuesto, plazos), pedila con amabilidad.\n3. Tono cálido y profesional, español rioplatense, máximo 150 palabras. Firmá como Equipo {{ $('Preparar Datos y Configuración').first().json.empresa }}.\n4. score: número de 0 a 100. Caliente = 80 o más, Tibio = 50 a 79, Frio = menos de 50.\n5. tiene_presupuesto: true solo si el cliente menciona un monto concreto que quiere gastar. presupuesto: ese monto con su moneda, por ejemplo USD 8.000 o ARS 5.000.000. Si no menciona monto, presupuesto va vacío.\n\nRespondé SOLO con un objeto JSON válido, sin texto extra, con estas claves: score (número), categoria (Caliente, Tibio o Frio), servicio_id (el id exacto de la lista), resumen (una oración para el equipo), tiene_presupuesto (true o false), presupuesto (texto), respuesta (el texto del email para el cliente)."
+            }
+          ]
+        }
+      },
+      "executeOnce": true,
+      "retryOnFail": true,
+      "maxTries": 2,
+      "onError": "continueErrorOutput"
+    },
+    {
+      "id": "d68ed991-1117-4c28-94fb-e4aced116468",
+      "name": "Modelo Claude Sonnet 5",
+      "type": "@n8n/n8n-nodes-langchain.lmChatAnthropic",
+      "typeVersion": 1.6,
+      "position": [
+        1440,
+        520
+      ],
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "list",
+          "value": "claude-sonnet-5",
+          "cachedResultName": "Claude Sonnet 5"
+        },
+        "options": {
+          "maxTokensToSample": 600
+        }
+      },
+      "credentials": {}
+    },
+    {
+      "id": "57fe50ae-eb7e-42c7-8124-16d4984af098",
+      "name": "Registrar Error en Notion",
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 3,
+      "position": [
+        2160,
+        560
+      ],
+      "parameters": {
+        "authentication": "oAuth2",
+        "resource": "databasePage",
+        "operation": "create",
+        "dataSourceId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "f0819e2e-95fa-4678-a80d-4ae799af19c8",
+          "cachedResultName": "Log de Errores"
+        },
+        "title": "=Error en {{ $prevNode.name }} - {{ $now.toFormat('dd/MM HH:mm') }}",
+        "propertiesUi": {
+          "propertyValues": [
+            {
+              "key": "Tipo|select",
+              "selectValue": "={{ $prevNode.name.startsWith('Claude') ? 'Fallo API IA' : ($prevNode.name.startsWith('Responder') ? 'Fallo envio Gmail' : 'Respuesta IA invalida') }}"
+            },
+            {
+              "key": "Nodo|rich_text",
+              "textContent": "={{ $prevNode.name }}"
+            },
+            {
+              "key": "Detalle|rich_text",
+              "textContent": "={{ ($json.error ? JSON.stringify($json.error) : 'La IA devolvió datos incompletos: ' + JSON.stringify($json)).slice(0, 1900) }}"
+            },
+            {
+              "key": "Lead|relation",
+              "relationValue": [
+                "={{ $('Guardar Lead en Notion (Pendiente)').first().json.id }}"
+              ]
+            }
+          ]
+        }
+      },
+      "credentials": {}
+    },
+    {
+      "id": "13373b81-d2f0-43d1-bb5a-62b77b1fa588",
+      "name": "Actualizar Lead: Error",
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 3,
+      "position": [
+        2400,
+        560
+      ],
+      "parameters": {
+        "authentication": "oAuth2",
+        "resource": "databasePage",
+        "operation": "update",
+        "pageId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{ $('Guardar Lead en Notion (Pendiente)').first().json.id }}"
+        },
+        "propertiesUi": {
+          "propertyValues": [
+            {
+              "key": "Estado|select",
+              "selectValue": "Error"
+            }
+          ]
+        }
+      },
+      "credentials": {}
+    },
+    {
+      "id": "0c0d0908-fce9-4ab7-a5a2-59f63a5007b3",
+      "name": "Extraer Respuesta de Claude",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1680,
+        300
+      ],
+      "parameters": {
+        "mode": "manual",
+        "includeOtherFields": false,
+        "assignments": {
+          "assignments": [
+            {
+              "id": "b1",
+              "name": "ia",
+              "value": "={{ JSON.parse($json.text.replace(/```json|```/g, '').trim()) }}",
+              "type": "object"
+            }
+          ]
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "id": "702c951e-4b85-4639-9fdc-ca28d64865ad",
+      "name": "¿Respuesta de IA Válida?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1920,
+        300
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "leftValue": "={{ $json.ia.score }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gte"
+              }
+            },
+            {
+              "leftValue": "={{ $json.ia.score }}",
+              "rightValue": 100,
+              "operator": {
+                "type": "number",
+                "operation": "lte"
+              }
+            },
+            {
+              "leftValue": "={{ $json.ia.respuesta }}",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "cc058184-e3a8-45ac-8247-cb918092f5c4",
+      "name": "Actualizar Lead: Procesado por IA",
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 3,
+      "position": [
+        2160,
+        200
+      ],
+      "parameters": {
+        "authentication": "oAuth2",
+        "resource": "databasePage",
+        "operation": "update",
+        "pageId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{ $('Guardar Lead en Notion (Pendiente)').first().json.id }}"
+        },
+        "propertiesUi": {
+          "propertyValues": [
+            {
+              "key": "Estado|select",
+              "selectValue": "Procesado por IA"
+            },
+            {
+              "key": "Score|number",
+              "numberValue": "={{ $json.ia.score }}"
+            },
+            {
+              "key": "Categoria|select",
+              "selectValue": "={{ $json.ia.categoria }}"
+            },
+            {
+              "key": "Resumen IA|rich_text",
+              "textContent": "={{ $json.ia.resumen }}"
+            },
+            {
+              "key": "Respuesta propuesta|rich_text",
+              "textContent": "={{ $json.ia.respuesta }}"
+            },
+            {
+              "key": "Servicio|relation",
+              "relationValue": [
+                "={{ $json.ia.servicio_id }}"
+              ]
+            }
+          ]
+        }
+      },
+      "credentials": {},
+      "retryOnFail": true,
+      "maxTries": 3
+    },
+    {
+      "id": "a2e399e9-88c9-4529-9237-d7fd0bc74316",
+      "name": "Pedir Aprobación (Humano en el Loop)",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        2400,
+        200
+      ],
+      "parameters": {
+        "resource": "message",
+        "operation": "sendAndWait",
+        "sendTo": "={{ $('Preparar Datos y Configuración').first().json.emailAprobador }}",
+        "subject": "=[APROBACION] Lead {{ $('Extraer Respuesta de Claude').first().json.ia.categoria }} ({{ $('Extraer Respuesta de Claude').first().json.ia.score }}/100) - {{ $('Preparar Datos y Configuración').first().json.nombre }}",
+        "message": "=<h3>Nuevo posible cliente</h3><p><b>De:</b> {{ $('Preparar Datos y Configuración').first().json.nombre }} ({{ $('Preparar Datos y Configuración').first().json.email }})<br><b>Score:</b> {{ $('Extraer Respuesta de Claude').first().json.ia.score }}/100 - {{ $('Extraer Respuesta de Claude').first().json.ia.categoria }}<br><b>Resumen:</b> {{ $('Extraer Respuesta de Claude').first().json.ia.resumen }}</p><p><b>Mensaje original:</b><br><i>{{ $('Preparar Datos y Configuración').first().json.mensaje }}</i></p><hr><p><b>Respuesta que se va a enviar:</b></p><p>{{ $('Extraer Respuesta de Claude').first().json.ia.respuesta.replace(/\\n/g, '<br>') }}</p><p><a href=\"{{ $('Guardar Lead en Notion (Pendiente)').first().json.url }}\">Ver lead en Notion</a></p>",
+        "responseType": "approval",
+        "approvalOptions": {
+          "values": {
+            "approvalType": "double",
+            "approveLabel": "Aprobar y enviar",
+            "disapproveLabel": "Rechazar"
+          }
+        },
+        "options": {
+          "limitWaitTime": {
+            "values": {
+              "limitType": "afterTimeInterval",
+              "resumeAmount": 24,
+              "resumeUnit": "hours"
+            }
+          },
+          "appendAttribution": false
+        }
+      },
+      "credentials": {}
+    },
+    {
+      "id": "c8d3b065-528d-48f7-84dd-e036d1d1b90b",
+      "name": "¿Aprobado por el Humano?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        2640,
+        200
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "leftValue": "={{ $json.data?.approved === true }}",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "0995bd38-4567-4b45-b480-a0efb6e39a30",
+      "name": "Actualizar Lead: Aprobado por Humano",
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 3,
+      "position": [
+        2880,
+        100
+      ],
+      "parameters": {
+        "authentication": "oAuth2",
+        "resource": "databasePage",
+        "operation": "update",
+        "pageId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{ $('Guardar Lead en Notion (Pendiente)').first().json.id }}"
+        },
+        "propertiesUi": {
+          "propertyValues": [
+            {
+              "key": "Estado|select",
+              "selectValue": "Aprobado por Humano"
+            },
+            {
+              "key": "Feedback humano|rich_text",
+              "textContent": "=Aprobado el {{ $now.toFormat('dd/MM/yyyy HH:mm') }}"
+            }
+          ]
+        }
+      },
+      "credentials": {},
+      "retryOnFail": true,
+      "maxTries": 3
+    },
+    {
+      "id": "1ea10ac4-6f22-486c-aa0e-a97f9e3b1ccb",
+      "name": "Responder al Cliente (Mismo Hilo)",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        3120,
+        100
+      ],
+      "parameters": {
+        "resource": "message",
+        "operation": "reply",
+        "messageId": "={{ $('Preparar Datos y Configuración').first().json.gmailMessageId }}",
+        "emailType": "html",
+        "message": "={{ $('Extraer Respuesta de Claude').first().json.ia.respuesta.replace(/\\n/g, '<br>') }}",
+        "options": {
+          "replyToSenderOnly": true,
+          "appendAttribution": false
+        }
+      },
+      "credentials": {},
+      "retryOnFail": true,
+      "maxTries": 2,
+      "onError": "continueErrorOutput"
+    },
+    {
+      "id": "7c22faa2-df1d-488d-89d7-f94e445d38af",
+      "name": "Actualizar Lead: Rechazado",
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 3,
+      "position": [
+        2880,
+        320
+      ],
+      "parameters": {
+        "authentication": "oAuth2",
+        "resource": "databasePage",
+        "operation": "update",
+        "pageId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{ $('Guardar Lead en Notion (Pendiente)').first().json.id }}"
+        },
+        "propertiesUi": {
+          "propertyValues": [
+            {
+              "key": "Estado|select",
+              "selectValue": "Rechazado"
+            },
+            {
+              "key": "Feedback humano|rich_text",
+              "textContent": "={{ $json.data?.approved === false ? 'Rechazado por el humano' : 'Sin respuesta en 24 hs' }}"
+            }
+          ]
+        }
+      },
+      "credentials": {},
+      "retryOnFail": true,
+      "maxTries": 3
+    },
+    {
+      "id": "fa6f1715-165d-48ae-b105-d7209b5b1597",
+      "name": "Actualizar Lead: Enviado",
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 3,
+      "position": [
+        3360,
+        100
+      ],
+      "parameters": {
+        "authentication": "oAuth2",
+        "resource": "databasePage",
+        "operation": "update",
+        "pageId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{ $('Guardar Lead en Notion (Pendiente)').first().json.id }}"
+        },
+        "propertiesUi": {
+          "propertyValues": [
+            {
+              "key": "Estado|select",
+              "selectValue": "Enviado"
+            },
+            {
+              "key": "Gmail Thread ID|rich_text",
+              "textContent": "={{ $json.threadId }}"
+            }
+          ]
+        }
+      },
+      "credentials": {},
+      "retryOnFail": true,
+      "maxTries": 3
+    },
+    {
+      "id": "427144bf-dd27-47a9-ab67-646a3537133c",
+      "name": "Sticky Note 427144bf",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -40,
+        40
+      ],
+      "parameters": {
+        "content": "## 1. Entrada y filtro\nGmail revisa cada minuto los emails NO leídos con asunto de consulta (y nunca los nuestros). El filtro corta bucles y mensajes vacíos.",
+        "color": 4,
+        "width": 720,
+        "height": 200
+      }
+    },
+    {
+      "id": "96b3c555-3aa6-4abf-9b58-c4c5b9741e68",
+      "name": "Sticky Note 96b3c555",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        700,
+        40
+      ],
+      "parameters": {
+        "content": "## 2. Memoria + IA\nSe guarda el lead en Notion, se leen los servicios (base de conocimiento) y Claude califica y redacta la respuesta. Max tokens: 600.",
+        "color": 6,
+        "width": 1180,
+        "height": 200
+      }
+    },
+    {
+      "id": "507def07-5c11-4bdf-b27b-705421d1967c",
+      "name": "Sticky Note 507def07",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        2120,
+        -140
+      ],
+      "parameters": {
+        "content": "## 3. Aprobación humana y respuesta\nEl flujo se frena hasta que alguien toca Aprobar en su email. Recién ahí se responde al cliente en el mismo hilo de Gmail.",
+        "color": 3,
+        "width": 1420,
+        "height": 200
+      }
+    },
+    {
+      "id": "d8e4bbf8-96c1-4b77-a5c0-4a39312e4be9",
+      "name": "Sticky Note d8e4bbf8",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        2120,
+        720
+      ],
+      "parameters": {
+        "content": "## Errores\nSi Claude falla, devuelve algo inválido o no se puede enviar el email: se registra en Notion (Log de Errores) y el lead queda en estado Error.",
+        "color": 2,
+        "width": 520,
+        "height": 160
+      }
+    },
+    {
+      "parameters": {
+        "operation": "appendOrUpdate",
+        "authentication": "oAuth2",
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "1hVSrCGKFrNnxjVx6uCNp3Q6DJBcaee1APYz65sUc41g",
+          "cachedResultName": "Clientes - Estudio Norte"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "id",
+          "value": "0",
+          "cachedResultName": "Clientes"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "matchingColumns": [
+            "Email"
+          ],
+          "value": {
+            "Fecha": "={{ $now.toFormat('dd/MM/yyyy HH:mm') }}",
+            "Nombre": "={{ $('Preparar Datos y Configuración').first().json.nombre }}",
+            "Email": "={{ $('Preparar Datos y Configuración').first().json.email }}",
+            "Asunto": "={{ $('Preparar Datos y Configuración').first().json.asunto }}",
+            "Categoria": "={{ $('Extraer Respuesta de Claude').first().json.ia.categoria }}",
+            "¿Tiene presupuesto?": "={{ $('Extraer Respuesta de Claude').first().json.ia.tiene_presupuesto === true ? 'Sí' : 'No' }}",
+            "Presupuesto": "={{ $('Extraer Respuesta de Claude').first().json.ia.presupuesto || '' }}"
+          },
+          "schema": [
+            {
+              "id": "Fecha",
+              "displayName": "Fecha",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Nombre",
+              "displayName": "Nombre",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Email",
+              "displayName": "Email",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Asunto",
+              "displayName": "Asunto",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Categoria",
+              "displayName": "Categoria",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "¿Tiene presupuesto?",
+              "displayName": "¿Tiene presupuesto?",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Presupuesto",
+              "displayName": "Presupuesto",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "f2e6a83e-b6dc-4239-befe-52ae134b3f17",
+      "name": "Agregar Cliente a Google Sheets",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        2288,
+        432
+      ],
+      "retryOnFail": true,
+      "maxTries": 2,
+      "onError": "continueRegularOutput"
+    }
+  ],
+  "connections": {
+    "Gmail: Nuevo Email de Cliente": {
+      "main": [
+        [
+          {
+            "node": "Preparar Datos y Configuración",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar Datos y Configuración": {
+      "main": [
+        [
+          {
+            "node": "Filtro Anti-Bucle",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filtro Anti-Bucle": {
+      "main": [
+        [
+          {
+            "node": "Guardar Lead en Notion (Pendiente)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Guardar Lead en Notion (Pendiente)": {
+      "main": [
+        [
+          {
+            "node": "Marcar Email como Leído",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Marcar Email como Leído": {
+      "main": [
+        [
+          {
+            "node": "Leer Servicios de Notion",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Leer Servicios de Notion": {
+      "main": [
+        [
+          {
+            "node": "Claude: Analizar Lead y Redactar Respuesta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claude: Analizar Lead y Redactar Respuesta": {
+      "main": [
+        [
+          {
+            "node": "Extraer Respuesta de Claude",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Registrar Error en Notion",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Modelo Claude Sonnet 5": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Claude: Analizar Lead y Redactar Respuesta",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Registrar Error en Notion": {
+      "main": [
+        [
+          {
+            "node": "Actualizar Lead: Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extraer Respuesta de Claude": {
+      "main": [
+        [
+          {
+            "node": "¿Respuesta de IA Válida?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Registrar Error en Notion",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Respuesta de IA Válida?": {
+      "main": [
+        [
+          {
+            "node": "Actualizar Lead: Procesado por IA",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Registrar Error en Notion",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Actualizar Lead: Procesado por IA": {
+      "main": [
+        [
+          {
+            "node": "Agregar Cliente a Google Sheets",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pedir Aprobación (Humano en el Loop)": {
+      "main": [
+        [
+          {
+            "node": "¿Aprobado por el Humano?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Aprobado por el Humano?": {
+      "main": [
+        [
+          {
+            "node": "Actualizar Lead: Aprobado por Humano",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Actualizar Lead: Rechazado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Actualizar Lead: Aprobado por Humano": {
+      "main": [
+        [
+          {
+            "node": "Responder al Cliente (Mismo Hilo)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Responder al Cliente (Mismo Hilo)": {
+      "main": [
+        [
+          {
+            "node": "Actualizar Lead: Enviado",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Registrar Error en Notion",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Agregar Cliente a Google Sheets": {
+      "main": [
+        [
+          {
+            "node": "Pedir Aprobación (Humano en el Loop)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {}
+}
